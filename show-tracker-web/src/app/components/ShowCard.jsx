@@ -10,11 +10,6 @@ export default function ShowCard({
   return (
     <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-start gap-4">
-        {/* Initial avatar */}
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-xl font-bold text-white">
-          {show.title?.charAt(0)?.toUpperCase() || "?"}
-        </div>
-
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
