@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "../utils/axios";
 
 export default function ShowForm({ initialShow = null, onSubmit, onClose }) {
   const [title, setTitle] = useState(initialShow?.title ?? "");
@@ -8,7 +9,22 @@ export default function ShowForm({ initialShow = null, onSubmit, onClose }) {
   const [currentEpisode, setCurrentEpisode] = useState(
     initialShow?.currentEpisode ?? 0,
   );
+  const [profiles, setProfiles] = useState([]);
+  const [profileId, setProfileId] = useState(initialShow?.profileId ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      try {
+        const { data } = await axios.get("/profiles");
+        setProfiles(data);
+      } catch (error) {
+        console.error("Failed to fetch profiles:", error);
+      }
+    };
+
+    fetchProfiles();
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -22,6 +38,7 @@ export default function ShowForm({ initialShow = null, onSubmit, onClose }) {
         title: title.trim(),
         status,
         current_episode: Number(currentEpisode),
+        profile_id: Number(profileId),
       });
     } finally {
       setIsSubmitting(false);
@@ -66,6 +83,26 @@ export default function ShowForm({ initialShow = null, onSubmit, onClose }) {
               required
               className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
             />
+          </div>
+
+          {/* Profile */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Profile
+            </label>
+            <select
+              value={profileId}
+              onChange={(event) => setProfileId(event.target.value)}
+              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+            >
+              <option value="">Select profile</option>
+
+              {profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

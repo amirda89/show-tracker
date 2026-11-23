@@ -2,33 +2,11 @@
 
 import { useEffect, useState } from "react";
 
+import api from "../utils/axios";
+
 import ShowForm from "./ShowForm";
 import ShowFilters from "./ShowFilters";
 import ShowList from "./ShowList";
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://show-tracker-31zt.onrender.com/api/shows";
-
-// Reusable API request function
-async function apiRequest(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => null);
-    throw new Error(error?.message || `Request failed: ${response.status}`);
-  }
-
-  if (response.status === 204) return null;
-
-  return response.json();
-}
 
 // Supports both { show: {...} } and direct show responses
 function getShowFromResponse(data) {
@@ -53,7 +31,7 @@ export default function ShowTracker() {
         setIsLoading(true);
         setError("");
 
-        const data = await apiRequest(API_URL);
+        const { data } = await api.get("/shows");
 
         // Supports { shows: [...] } or [...]
         const fetchedShows = data?.shows ?? data;
@@ -70,7 +48,9 @@ export default function ShowTracker() {
           })),
         );
       } catch (err) {
-        setError(err.message || "Failed to load shows");
+        setError(
+          err.response?.data?.message || err.message || "Failed to load shows",
+        );
       } finally {
         setIsLoading(false);
       }
@@ -90,26 +70,35 @@ export default function ShowTracker() {
     );
   };
 
-  // --------------------------------
   // ADD SHOW
-  // --------------------------------
-  // Currently local only.
-  // Connect to POST /api/shows when your backend is ready.
   const handleAddShow = async (newShow) => {
-    setShows((current) => [
-      {
-        ...newShow,
-        id: crypto.randomUUID(),
-      },
-      ...current,
-    ]);
-    const res = await apiRequest(`${API_URL}`, {
-      method: "POST",
-      body: JSON.stringify(newShow),
-    });
+    setError("");
 
-    setActiveFilter("All");
-    setIsModalOpen(false);
+    try {
+      const { data } = await api.post("/shows", newShow);
+
+      const createdShow = getShowFromResponse(data);
+
+      setShows((current) => [
+        {
+          ...createdShow,
+          id: createdShow.id ?? createdShow._id,
+          currentEpisode:
+            createdShow.currentEpisode ??
+            createdShow.current_episode ??
+            newShow.current_episode ??
+            0,
+        },
+        ...current,
+      ]);
+
+      setActiveFilter("All");
+      setIsModalOpen(false);
+    } catch (err) {
+      setError(
+        err.response?.data?.message || err.message || "Failed to add show",
+      );
+    }
   };
 
   // EDIT SHOW
@@ -122,10 +111,7 @@ export default function ShowTracker() {
     setError("");
 
     try {
-      const data = await apiRequest(`${API_URL}/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(updatedFields),
-      });
+      const { data } = await api.put(`/shows/${id}`, updatedFields);
 
       const updatedShow = getShowFromResponse(data);
 
@@ -139,7 +125,7 @@ export default function ShowTracker() {
                 currentEpisode:
                   updatedShow.currentEpisode ??
                   updatedShow.current_episode ??
-                  updatedFields.currentEpisode ??
+                  updatedFields.current_episode ??
                   show.currentEpisode,
               }
             : show,
@@ -149,7 +135,9 @@ export default function ShowTracker() {
       setEditingShow(null);
       setIsModalOpen(false);
     } catch (err) {
-      setError(err.message || "Failed to update show");
+      setError(
+        err.response?.data?.message || err.message || "Failed to update show",
+      );
     } finally {
       setShowBusy(id, false);
     }
@@ -167,13 +155,13 @@ export default function ShowTracker() {
     setError("");
 
     try {
-      await apiRequest(`${API_URL}/${id}`, {
-        method: "DELETE",
-      });
+      await api.delete(`/shows/${id}`);
 
       setShows((current) => current.filter((show) => show.id !== id));
     } catch (err) {
-      setError(err.message || "Failed to delete show");
+      setError(
+        err.response?.data?.message || err.message || "Failed to delete show",
+      );
     } finally {
       setShowBusy(id, false);
     }
@@ -191,10 +179,7 @@ export default function ShowTracker() {
     setError("");
 
     try {
-      const data = await apiRequest(`${API_URL}/${id}/episode`, {
-        method: "PATCH",
-        body: JSON.stringify({ action }),
-      });
+      const { data } = await api.patch(`/shows/${id}/episode`, { action });
 
       const updatedShow = getShowFromResponse(data);
 
@@ -214,7 +199,11 @@ export default function ShowTracker() {
         ),
       );
     } catch (err) {
-      setError(err.message || "Failed to update episode");
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to update episode",
+      );
     } finally {
       setShowBusy(id, false);
     }
@@ -240,7 +229,7 @@ export default function ShowTracker() {
     if (editingShow) {
       await handleEditShow(formData);
     } else {
-      handleAddShow(formData);
+      await handleAddShow(formData);
     }
   };
 
@@ -302,14 +291,12 @@ export default function ShowTracker() {
         </div>
       ) : (
         <>
-          {/* Status filters */}
           <ShowFilters
             shows={shows}
             activeFilter={activeFilter}
             onFilterChange={setActiveFilter}
           />
 
-          {/* Show list */}
           <ShowList
             shows={filteredShows}
             activeFilter={activeFilter}

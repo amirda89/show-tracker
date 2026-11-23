@@ -17,15 +17,16 @@ app.use(
 );
 app.use(express.json());
 
+// SHOWS
 app.get("/api/shows", async (req, res) => {
   const result = await sql`SELECT * FROM shows`;
   res.json(result);
 });
 
 app.post("/api/shows", async (req, res) => {
-  const { title, status, current_episode } = req.body;
+  const { title, status, current_episode, profile_id } = req.body;
   const result =
-    await sql`INSERT INTO shows (title, status, current_episode) VALUES (${title}, ${status}, ${current_episode}) RETURNING *`;
+    await sql`INSERT INTO shows (title, status, current_episode, profileid) VALUES (${title}, ${status}, ${current_episode}, ${profile_id}) RETURNING *`;
   res.status(201).json(result[0]);
 });
 
@@ -86,4 +87,10 @@ app.delete("/api/shows/:id", async (req, res) => {
 });
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
+});
+
+//PROFILES
+app.get("/api/profiles", async (req, res) => {
+  const result = await sql`SELECT * FROM profiles`;
+  res.json(result);
 });
