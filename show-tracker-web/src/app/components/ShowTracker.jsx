@@ -6,7 +6,9 @@ import ShowForm from "./ShowForm";
 import ShowFilters from "./ShowFilters";
 import ShowList from "./ShowList";
 
-const API_URL = "http://localhost:3001/api/shows";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://show-tracker-31zt.onrender.com/api/shows";
 
 // Reusable API request function
 async function apiRequest(url, options = {}) {
@@ -258,7 +260,7 @@ export default function ShowTracker() {
           </h1>
 
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Keep track of what you&aposre watching
+            Keep track of what you are watching
           </p>
         </div>
 

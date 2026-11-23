@@ -5,7 +5,7 @@ export default function ShowCard({
   onDelete,
   onEpisodeChange,
 }) {
-  const currentEpisode = show.currentEpisode ?? 0;
+  const currentEpisode = show.current_episode ?? 0;
 
   return (
     <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
