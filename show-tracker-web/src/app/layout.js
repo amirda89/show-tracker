@@ -21,7 +21,7 @@ export default function RootLayout({ children }) {
           <Suspense>
             <Show when="signed-out">
               <div className="w-full h-screen flex justify-center items-center">
-                <SignIn />
+                <SignIn routing="hash" />
               </div>
             </Show>
             <Show when="signed-in">
