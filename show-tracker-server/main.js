@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { neon } from "@neondatabase/serverless";
 import "dotenv/config";
+import { clerkMiddleware, clerkClient, getAuth } from "@clerk/express";
 
 const sql = neon(process.env.DATABASE_URL);
 const app = express();
@@ -16,9 +17,17 @@ app.use(
   }),
 );
 app.use(express.json());
+app.use(clerkMiddleware());
 
 // SHOWS
 app.get("/api/shows", async (req, res) => {
+  const { isAuthenticated } = getAuth(req);
+
+  if (!isAuthenticated) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
   const result =
     await sql`SELECT shows.id, title, status, current_episode, name AS profilename FROM shows LEFT JOIN profiles ON shows.profileid = profiles.id`;
   res.json(result);

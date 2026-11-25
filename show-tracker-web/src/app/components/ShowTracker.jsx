@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-import api from "../utils/axios";
+import { useAuth } from "@clerk/nextjs";
+import api, { setAuthToken } from "../utils/axios";
 
 import ShowForm from "./ShowForm";
 import ShowFilters from "./ShowFilters";
@@ -24,12 +24,19 @@ export default function ShowTracker() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const { getToken, isLoaded } = useAuth();
+
   // GET ALL SHOWS
   useEffect(() => {
+    if (!isLoaded) return;
+
     const fetchShows = async () => {
       try {
         setIsLoading(true);
         setError("");
+
+        const token = await getToken();
+        setAuthToken(token);
 
         const { data } = await api.get("/shows");
 
@@ -57,7 +64,7 @@ export default function ShowTracker() {
     };
 
     fetchShows();
-  }, []);
+  }, [getToken, isLoaded]);
 
   // LOADING STATE FOR INDIVIDUAL SHOWS
   const setShowBusy = (id, busy) => {
@@ -75,6 +82,9 @@ export default function ShowTracker() {
     setError("");
 
     try {
+      const token = await getToken();
+      setAuthToken(token);
+
       const { data } = await api.post("/shows", newShow);
 
       const createdShow = getShowFromResponse(data);
@@ -111,6 +121,9 @@ export default function ShowTracker() {
     setError("");
 
     try {
+      const token = await getToken();
+      setAuthToken(token);
+
       const { data } = await api.put(`/shows/${id}`, updatedFields);
 
       const updatedShow = getShowFromResponse(data);
@@ -155,6 +168,9 @@ export default function ShowTracker() {
     setError("");
 
     try {
+      const token = await getToken();
+      setAuthToken(token);
+
       await api.delete(`/shows/${id}`);
 
       setShows((current) => current.filter((show) => show.id !== id));
@@ -179,6 +195,9 @@ export default function ShowTracker() {
     setError("");
 
     try {
+      const token = await getToken();
+      setAuthToken(token);
+
       const { data } = await api.patch(`/shows/${id}/episode`, { action });
 
       const updatedShow = getShowFromResponse(data);
