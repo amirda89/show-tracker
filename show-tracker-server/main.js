@@ -19,7 +19,8 @@ app.use(express.json());
 
 // SHOWS
 app.get("/api/shows", async (req, res) => {
-  const result = await sql`SELECT * FROM shows`;
+  const result =
+    await sql`SELECT shows.id, title, status, current_episode, name AS profilename FROM shows LEFT JOIN profiles ON shows.profileid = profiles.id`;
   res.json(result);
 });
 

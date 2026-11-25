@@ -93,6 +93,10 @@ export default function ShowCard({
             </div>
           </div>
 
+          <p className="mt-2 truncate text-xs text-gray-400 dark:text-gray-500">
+            {show.profilename}
+          </p>
+
           {isBusy && (
             <p className="mt-2 text-right text-xs text-gray-400">Saving...</p>
           )}

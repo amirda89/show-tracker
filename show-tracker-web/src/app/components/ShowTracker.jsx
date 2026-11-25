@@ -30,7 +30,7 @@ export default function ShowTracker() {
       try {
         setIsLoading(true);
         setError("");
-        console.log("Axios baseURL:", api.defaults.baseURL);
+
         const { data } = await api.get("/shows");
 
         // Supports { shows: [...] } or [...]
