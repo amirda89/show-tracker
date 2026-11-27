@@ -8,7 +8,6 @@ import ShowForm from "./ShowForm";
 import ShowFilters from "./ShowFilters";
 import ShowList from "./ShowList";
 
-// Supports both { show: {...} } and direct show responses
 function getShowFromResponse(data) {
   return data?.show ?? data;
 }
@@ -17,6 +16,7 @@ export default function ShowTracker() {
   const [shows, setShows] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [activeFilter, setActiveFilter] = useState("All");
+  const [typeFilter, setTypeFilter] = useState("all");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingShow, setEditingShow] = useState(null);
@@ -27,7 +27,7 @@ export default function ShowTracker() {
 
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
 
-  // GET ALL SHOWS
+  // GET ALL SHOWS & PROFILES
   useEffect(() => {
     if (!isLoaded) return;
 
@@ -132,10 +132,14 @@ export default function ShowTracker() {
       ]);
 
       setActiveFilter("All");
+      setTypeFilter("all");
       setIsModalOpen(false);
     } catch (err) {
       setError(
-        err.response?.data?.message || err.message || "Failed to add show",
+        err.response?.data?.error ||
+          err.response?.data?.message ||
+          err.message ||
+          "Failed to add show",
       );
     }
   };
@@ -178,7 +182,10 @@ export default function ShowTracker() {
       setIsModalOpen(false);
     } catch (err) {
       setError(
-        err.response?.data?.message || err.message || "Failed to update show",
+        err.response?.data?.error ||
+          err.response?.data?.message ||
+          err.message ||
+          "Failed to update show",
       );
     } finally {
       setShowBusy(id, false);
@@ -205,7 +212,10 @@ export default function ShowTracker() {
       setShows((current) => current.filter((show) => show.id !== id));
     } catch (err) {
       setError(
-        err.response?.data?.message || err.message || "Failed to delete show",
+        err.response?.data?.error ||
+          err.response?.data?.message ||
+          err.message ||
+          "Failed to delete show",
       );
     } finally {
       setShowBusy(id, false);
@@ -238,6 +248,7 @@ export default function ShowTracker() {
                 ...item,
                 ...updatedShow,
                 id: updatedShow.id ?? updatedShow._id ?? id,
+                status: updatedShow.status ?? item.status,
                 currentEpisode:
                   updatedShow.currentEpisode ??
                   updatedShow.current_episode ??
@@ -248,12 +259,61 @@ export default function ShowTracker() {
       );
     } catch (err) {
       setError(
-        err.response?.data?.message ||
+        err.response?.data?.error ||
+          err.response?.data?.message ||
           err.message ||
           "Failed to update episode",
       );
     } finally {
       setShowBusy(id, false);
+    }
+  };
+
+  // MARK MOVIE COMPLETED
+  const handleMarkCompleted = async (show) => {
+    setShowBusy(show.id, true);
+    setError("");
+
+    try {
+      const token = await getToken();
+      setAuthToken(token);
+
+      const { data } = await api.put(`/shows/${show.id}`, {
+        title: show.title,
+        media_type: "movie",
+        status: "Completed",
+        current_episode: 1,
+        total_episodes: 1,
+        profile_id: show.profileid ?? show.profileId ?? null,
+      });
+
+      const updatedShow = getShowFromResponse(data);
+
+      setShows((current) =>
+        current.map((item) =>
+          item.id === show.id
+            ? {
+                ...item,
+                ...updatedShow,
+                id: updatedShow.id ?? updatedShow._id ?? show.id,
+                status: updatedShow.status ?? "Completed",
+                currentEpisode:
+                  updatedShow.currentEpisode ??
+                  updatedShow.current_episode ??
+                  1,
+              }
+            : item,
+        ),
+      );
+    } catch (err) {
+      setError(
+        err.response?.data?.error ||
+          err.response?.data?.message ||
+          err.message ||
+          "Failed to mark movie completed",
+      );
+    } finally {
+      setShowBusy(show.id, false);
     }
   };
 
@@ -281,11 +341,13 @@ export default function ShowTracker() {
     }
   };
 
-  // FILTER SHOWS
-  const filteredShows =
-    activeFilter === "All"
-      ? shows
-      : shows.filter((show) => show.status === activeFilter);
+  const filteredShows = shows.filter((show) => {
+    const mediaType = show.media_type ?? show.mediaType ?? "series";
+    const matchesType = typeFilter === "all" || mediaType === typeFilter;
+    const matchesStatus =
+      activeFilter === "All" || show.status === activeFilter;
+    return matchesType && matchesStatus;
+  });
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[680px] px-4 py-10">
@@ -306,11 +368,10 @@ export default function ShowTracker() {
           onClick={openAddModal}
           className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
         >
-          + Add show
+          + Add entry
         </button>
       </div>
 
-      {/* Error message */}
       {error && (
         <div
           role="alert"
@@ -328,7 +389,6 @@ export default function ShowTracker() {
         </div>
       )}
 
-      {/* Loading */}
       {isLoading ? (
         <div className="py-16 text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-indigo-600" />
@@ -343,6 +403,8 @@ export default function ShowTracker() {
             shows={shows}
             activeFilter={activeFilter}
             onFilterChange={setActiveFilter}
+            typeFilter={typeFilter}
+            onTypeFilterChange={setTypeFilter}
           />
 
           <ShowList
@@ -352,11 +414,11 @@ export default function ShowTracker() {
             onEdit={openEditModal}
             onDelete={handleDeleteShow}
             onEpisodeChange={handleEpisodeChange}
+            onMarkCompleted={handleMarkCompleted}
           />
         </>
       )}
 
-      {/* Add / Edit modal */}
       {isModalOpen && (
         <ShowForm
           initialShow={editingShow}
