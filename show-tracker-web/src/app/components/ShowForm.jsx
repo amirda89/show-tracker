@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import axios from "../utils/axios";
+import { useAuth } from "@clerk/nextjs";
+import api, { setAuthToken } from "../utils/axios";
 
 export default function ShowForm({ initialShow = null, onSubmit, onClose }) {
   const [title, setTitle] = useState(initialShow?.title ?? "");
@@ -11,20 +12,68 @@ export default function ShowForm({ initialShow = null, onSubmit, onClose }) {
   );
   const [profiles, setProfiles] = useState([]);
   const [profileId, setProfileId] = useState(initialShow?.profileId ?? "");
+
+  const [newProfileName, setNewProfileName] = useState("");
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+
   useEffect(() => {
+    if (!isLoaded || !isSignedIn || !userId) return;
+    let cancelled = false;
+
     const fetchProfiles = async () => {
       try {
-        const { data } = await axios.get("/profiles");
-        setProfiles(data);
+        const token = await getToken();
+        setAuthToken(token);
+
+        const { data } = await api.get("/profiles");
+        if (cancelled) return;
+
+        const list = Array.isArray(data) ? data : (data?.profiles ?? []);
+        setProfiles(list);
       } catch (error) {
-        console.error("Failed to fetch profiles:", error);
+        if (!cancelled) {
+          console.error("Failed to fetch profiles:", error);
+          setFormError("Failed to load profiles");
+        }
       }
     };
 
     fetchProfiles();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken, isLoaded, isSignedIn, userId]);
+
+  const handleCreateProfile = async () => {
+    const trimmed = newProfileName.trim();
+    if (!trimmed) return;
+
+    setIsCreatingProfile(true);
+    setFormError("");
+
+    try {
+      const token = await getToken();
+      setAuthToken(token);
+
+      const { data } = await api.post("/profiles", { name: trimmed });
+      setProfiles((prev) => [...prev, data]);
+      setProfileId(String(data.id));
+      setNewProfileName("");
+    } catch (error) {
+      setFormError(
+        error.response?.data?.error ||
+          error.message ||
+          "Failed to create profile",
+      );
+    } finally {
+      setIsCreatingProfile(false);
+    }
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -32,14 +81,22 @@ export default function ShowForm({ initialShow = null, onSubmit, onClose }) {
     if (!title.trim()) return;
 
     setIsSubmitting(true);
+    setFormError("");
 
     try {
       await onSubmit({
         title: title.trim(),
         status,
-        current_episode: Number(currentEpisode),
-        profile_id: Number(profileId),
+        current_episode: Math.max(0, Number(currentEpisode) || 0),
+        profile_id: profileId ? Number(profileId) : null,
       });
+    } catch (error) {
+      setFormError(
+        error.response?.data?.error ||
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to save show",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -71,6 +128,12 @@ export default function ShowForm({ initialShow = null, onSubmit, onClose }) {
           </button>
         </div>
 
+        {formError && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+            {formError}
+          </div>
+        )}
+
         <div className="space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -95,7 +158,7 @@ export default function ShowForm({ initialShow = null, onSubmit, onClose }) {
               onChange={(event) => setProfileId(event.target.value)}
               className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
             >
-              <option value="">Select profile</option>
+              <option value="">No profile</option>
 
               {profiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>
@@ -103,6 +166,25 @@ export default function ShowForm({ initialShow = null, onSubmit, onClose }) {
                 </option>
               ))}
             </select>
+
+            {/* Quick create profile */}
+            <div className="mt-2 flex gap-2">
+              <input
+                type="text"
+                value={newProfileName}
+                onChange={(event) => setNewProfileName(event.target.value)}
+                placeholder="New profile name (e.g. Me, Kids)"
+                className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-900 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+              />
+              <button
+                type="button"
+                onClick={handleCreateProfile}
+                disabled={isCreatingProfile || !newProfileName.trim()}
+                className="rounded-xl border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                {isCreatingProfile ? "Adding..." : "+ Profile"}
+              </button>
+            </div>
           </div>
 
           <div>

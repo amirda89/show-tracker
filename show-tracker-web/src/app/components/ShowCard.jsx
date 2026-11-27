@@ -5,7 +5,7 @@ export default function ShowCard({
   onDelete,
   onEpisodeChange,
 }) {
-  const currentEpisode = show.current_episode ?? 0;
+  const currentEpisode = show.currentEpisode ?? show.current_episode ?? 0;
 
   return (
     <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
@@ -16,9 +16,16 @@ export default function ShowCard({
               <h3 className="truncate font-semibold text-gray-900 dark:text-white">
                 {show.title}
               </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {show.status}
-              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {show.status}
+                </p>
+                {show.profilename && (
+                  <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600 dark:bg-indigo-950/70 dark:text-indigo-300">
+                    {show.profilename}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="flex shrink-0 gap-1">
@@ -92,10 +99,6 @@ export default function ShowCard({
               </button>
             </div>
           </div>
-
-          <p className="mt-2 truncate text-xs text-gray-400 dark:text-gray-500">
-            {show.profilename}
-          </p>
 
           {isBusy && (
             <p className="mt-2 text-right text-xs text-gray-400">Saving...</p>

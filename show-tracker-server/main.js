@@ -2,11 +2,11 @@ import express from "express";
 import cors from "cors";
 import { neon } from "@neondatabase/serverless";
 import "dotenv/config";
-import { clerkMiddleware, clerkClient, getAuth } from "@clerk/express";
+import { clerkMiddleware, getAuth } from "@clerk/express";
 
 const sql = neon(process.env.DATABASE_URL);
 const app = express();
-const port = 3001;
+const port = process.env.PORT;
 
 app.use(
   cors({
@@ -19,43 +19,69 @@ app.use(
 app.use(express.json());
 app.use(clerkMiddleware());
 
-// SHOWS
-app.get("/api/shows", async (req, res) => {
-  const { isAuthenticated } = getAuth(req);
-
-  if (!isAuthenticated) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
+function requireAuthUser(req, res, next) {
+  const { isAuthenticated, userId } = getAuth(req);
+  if (!isAuthenticated || !userId) {
+    return res.status(401).json({ error: "Unauthorized" });
   }
+  req.userId = userId;
+  next();
+}
 
-  const result =
-    await sql`SELECT shows.id, title, status, current_episode, name AS profilename FROM shows LEFT JOIN profiles ON shows.profileid = profiles.id`;
+// SHOWS
+app.get("/api/shows", requireAuthUser, async (req, res) => {
+  const result = await sql`SELECT 
+    shows.id, 
+    title, 
+    status, 
+    current_episode, 
+    name AS profilename 
+    FROM shows 
+    LEFT JOIN profiles 
+    ON shows.profileid = profiles.id 
+    WHERE shows.userid = ${req.userId}`;
   res.json(result);
 });
 
-app.post("/api/shows", async (req, res) => {
+app.post("/api/shows", requireAuthUser, async (req, res) => {
   const { title, status, current_episode, profile_id } = req.body;
+
+  if (profile_id) {
+    const ownedProfile =
+      await sql`SELECT id FROM profiles WHERE id=${profile_id} AND userid=${req.userId}`;
+    if (ownedProfile.length === 0) {
+      return res.status(403).json({ error: "Invalid profile for this user" });
+    }
+  }
   const result =
-    await sql`INSERT INTO shows (title, status, current_episode, profileid) VALUES (${title}, ${status}, ${current_episode}, ${profile_id}) RETURNING *`;
+    await sql`INSERT INTO shows (title, status, current_episode, profileid, userid) 
+    VALUES (${title}, ${status}, ${current_episode}, ${profile_id}, ${req.userId}) 
+    RETURNING *`;
   res.status(201).json(result[0]);
 });
 
-app.put("/api/shows/:id", async (req, res) => {
+app.put("/api/shows/:id", requireAuthUser, async (req, res) => {
   const { id } = req.params;
-  const { title, status, current_episode } = req.body;
+  const { title, status, current_episode, profile_id } = req.body;
 
-  const result = await sql`UPDATE shows
-       SET title = ${title},
+  const result = await sql`
+      UPDATE shows
+      SET title = ${title},
            status = ${status},
            current_episode = ${current_episode},
+           profileid = ${profile_id}
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ${id}
+       WHERE id = ${id} AND userid = ${req.userId}
        RETURNING *`;
+
+  if (result.length === 0) {
+    return res.status(404).json({ error: "Show not found" });
+  }
 
   res.json(result[0]);
 });
 
-app.patch("/api/shows/:id/episode", async (req, res) => {
+app.patch("/api/shows/:id/episode", requireAuthUser, async (req, res) => {
   try {
     const { id } = req.params;
     const { action } = req.body;
@@ -69,14 +95,15 @@ app.patch("/api/shows/:id/episode", async (req, res) => {
     const rows = await sql`
       UPDATE shows
       SET current_episode = current_episode + ${delta}
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ${id}
         AND current_episode + ${delta} >= 0
       RETURNING *
     `;
 
     if (rows.length === 0) {
-      // Either the show doesn't exist, or the decrement would go below 0
-      const exists = await sql`SELECT 1 FROM shows WHERE id = ${id}`;
+      const exists =
+        await sql`SELECT current_episode FROM shows WHERE id = ${id} AND userId = ${req.userId}`;
       if (exists.length === 0) {
         return res.status(404).json({ message: "Show not found" });
       }
@@ -90,17 +117,35 @@ app.patch("/api/shows/:id/episode", async (req, res) => {
   }
 });
 
-app.delete("/api/shows/:id", async (req, res) => {
+app.delete("/api/shows/:id", requireAuthUser, async (req, res) => {
   const { id } = req.params;
-  await sql`DELETE FROM shows WHERE id=${id}`;
-  res.json({ message: "Deleted successfully", id });
-});
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  const deleted =
+    await sql`DELETE FROM shows WHERE id=${id} AND userid = ${req.userId} RETURNING id`;
+  if (deleted.length === 0)
+    return res.status(404).json({ error: "Show not found" });
+  res.json({ message: "Deleted successfully", id: deleted[0].id });
 });
 
 //PROFILES
-app.get("/api/profiles", async (req, res) => {
-  const result = await sql`SELECT * FROM profiles`;
+app.get("/api/profiles", requireAuthUser, async (req, res) => {
+  const result = await sql`SELECT * FROM profiles WHERE userid = ${req.userId}`;
   res.json(result);
+});
+
+app.post("/api/profiles", requireAuthUser, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: "Profile name is required" });
+  }
+
+  const result = await sql`
+      INSERT INTO profiles (name, userid)
+      VALUES (${name.trim()}, ${req.userId})
+      RETURNING *
+    `;
+  res.status(201).json(result[0]);
+});
+
+app.listen(port, () => {
+  console.log(`Example app listening on port ${port}`);
 });

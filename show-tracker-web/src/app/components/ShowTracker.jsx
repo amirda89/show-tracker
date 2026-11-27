@@ -15,6 +15,7 @@ function getShowFromResponse(data) {
 
 export default function ShowTracker() {
   const [shows, setShows] = useState([]);
+  const [profiles, setProfiles] = useState([]);
   const [activeFilter, setActiveFilter] = useState("All");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -24,25 +25,38 @@ export default function ShowTracker() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const { getToken, isLoaded } = useAuth();
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
 
   // GET ALL SHOWS
   useEffect(() => {
     if (!isLoaded) return;
 
-    const fetchShows = async () => {
+    if (!isSignedIn || !userId) {
+      setShows([]);
+      setProfiles([]);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchUserData = async () => {
       try {
         setIsLoading(true);
         setError("");
+        setShows([]);
 
         const token = await getToken();
         setAuthToken(token);
 
-        const { data } = await api.get("/shows");
+        const [showsRes, profilesRes] = await Promise.all([
+          api.get("/shows"),
+          api.get("/profiles"),
+        ]);
 
-        // Supports { shows: [...] } or [...]
-        const fetchedShows = data?.shows ?? data;
+        if (cancelled) return;
 
+        const fetchedShows = showsRes.data?.shows ?? showsRes.data;
         if (!Array.isArray(fetchedShows)) {
           throw new Error("Invalid shows response from server");
         }
@@ -54,17 +68,32 @@ export default function ShowTracker() {
             currentEpisode: show.currentEpisode ?? show.current_episode ?? 0,
           })),
         );
+
+        const fetchedProfiles = profilesRes.data?.profiles ?? profilesRes.data;
+        if (Array.isArray(fetchedProfiles)) {
+          setProfiles(fetchedProfiles);
+        }
       } catch (err) {
+        if (cancelled) return;
         setError(
-          err.response?.data?.message || err.message || "Failed to load shows",
+          err.response?.data?.error ||
+            err.response?.data?.message ||
+            err.message ||
+            "Failed to load data",
         );
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchShows();
-  }, [getToken, isLoaded]);
+    fetchUserData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken, isLoaded, isSignedIn, userId]);
 
   // LOADING STATE FOR INDIVIDUAL SHOWS
   const setShowBusy = (id, busy) => {
